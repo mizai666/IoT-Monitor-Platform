@@ -1,10 +1,14 @@
-# Hchapter01 — 物联网智能检测平台
+# 物联网设备监控与测试平台（Web 端）
 
 > 物联网创新设计竞赛（IoT Innovation Design Competition）参赛作品 · Web 端
 
-基于 **UniApp (Vue 3) + Node.js + MySQL** 的物联网智能检测平台。前端运行于 H5 浏览器，后端为 Express 服务（端口 `3000`），数据库 MySQL `hbuilderchapter01`（24 张表，启动时自动建）。核心能力：本地 MQTT 消息管理、五大云平台对接、设备监控、传感器历史、阈值告警、YOLOv8 摄像头检测、开关控制、定时任务、主题控制、响应规则引擎、组合数据查询。
+一套面向设备测试与运行监控场景的物联网 Web 控制台，采用 **UniApp (Vue 3) + Node.js + MySQL** 前后端分离架构。前端在 HBuilderX 中以 H5 形式运行于浏览器，后端是监听 `3000` 端口的 Express 服务，数据写入 MySQL 库 `hbuilderchapter01`，24 张表在服务启动时自动建好，无需手动导入 SQL。
 
-> 本项目也是 `chapter05`（纯 Java MQTT 控制台）的功能原型与参考来源。
+设备侧既可直接对接本地 MQTT broker（默认 `1883`），也可通过阿里云 IoT、华为云 IoTDA、OneNET、机智云四个公有云平台接入，后端以 3 秒间隔统一轮询并落库。页面侧覆盖完整链路：MQTT 消息收发、设备自动识别与多设备拆分、实时数据与历史曲线（折线 / 柱状 / 饼图）、发布上报（MQTT / HTTP 双通道）、开关与定时控制、阈值告警、五色主题切换、响应规则引擎与组合数据查询，并接入 YOLOv8 摄像头检测端处理图像侧判定结果。
+
+> **名称随场景调整，不作为固定属性**：平台不绑定具体行业，界面上的系统名称只是展示文案。换使用场景时，改 `pages.json` 中两处 `navigationBarTitleText` 与 `manifest.json` 的 `name` 即可，功能、接口与数据结构都不需要动。仓库截图取自热水器测试场景（导航栏标题为「基于物联网的热水器测试系统」），仅作示例。
+
+> 本项目与 `chapter05`（纯 Java 的 Android MQTT 控制台）同属一套竞赛作品的两个终端：Web 端面向浏览器，承担完整配置、多平台接入与批量数据查询；Android 端面向现场巡检与移动控制，通信层收敛到本地 MQTT。`chapter05` 的交互设计与数据模型即以本项目为原型，两端共用同一套设备识别规则与 JSON 数据结构。
 
 ---
 
@@ -155,7 +159,7 @@
 ## 目录结构
 
 ```
-Hchapter01/
+Hchapter01/                         # HBuilderX 工程目录名，可按场景重命名
 ├── App.uvue                        # 应用入口
 ├── main.uts                        # uni-app x 入口
 ├── index.html                      # H5 入口
@@ -268,7 +272,7 @@ node app.js
 ```
 
 ### 2. 启动前端
-HBuilderX 打开项目 → 运行 → 运行到浏览器 → Chrome
+HBuilderX 打开项目（工程目录名 `Hchapter01`）→ 运行 → 运行到浏览器 → Chrome
 
 > 顺序：**先启动后端，再开前端**，否则浏览器 `ERR_CONNECTION_REFUSED`。
 
