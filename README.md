@@ -8,7 +8,7 @@
 
 > **名称随场景调整，不作为固定属性**：平台不绑定具体行业，界面上的系统名称只是展示文案。换使用场景时，改 `pages.json` 中两处 `navigationBarTitleText` 与 `manifest.json` 的 `name` 即可，功能、接口与数据结构都不需要动。仓库截图取自热水器测试场景（导航栏标题为「基于物联网的热水器测试系统」），仅作示例。
 
-> 本项目与 `chapter05`（纯 Java 的 Android MQTT 控制台）同属一套竞赛作品的两个终端：Web 端面向浏览器，承担完整配置、多平台接入与批量数据查询；Android 端面向现场巡检与移动控制，通信层收敛到本地 MQTT。`chapter05` 的交互设计与数据模型即以本项目为原型，两端共用同一套设备识别规则与 JSON 数据结构。
+> 本项目与 `chapter05`“https://github.com/mizai666/IoT-Competition-App”（纯 Java 的 Android MQTT 控制台）同属一套竞赛作品的两个终端：Web 端面向浏览器，承担完整配置、多平台接入与批量数据查询；Android 端面向现场巡检与移动控制，通信层收敛到本地 MQTT。`chapter05`“https://github.com/mizai666/IoT-Competition-App” 的交互设计与数据模型即以本项目为原型，两端共用同一套设备识别规则与 JSON 数据结构。
 
 ---
 
