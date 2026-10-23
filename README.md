@@ -108,7 +108,7 @@
 
 <p align="center"><img src="./docs/screenshots/10-publish-from-file.png" width="500" alt="从文件发布"></p>
 
-选择本地日志文件后可批量解析并逐条发送，用于回放真实测试数据。
+可以选择本地文件向服务器发送GET/POST请求，然后会收到响应。
 
 ### 五、设备控制
 
