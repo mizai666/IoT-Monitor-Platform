@@ -1,0 +1,970 @@
+<template>
+  <view class="page-container" >
+    <!-- 左列：平台配置 -->
+    <view class="left-column">
+      <ConfigPanel
+        :platformType="platformType"
+        :mqttConfig="mqttConfig"
+        :cloudConfig="cloudConfig"
+        :cloudFields="currentCloudFields"
+        :isConnected="isConnected"
+        :isSaving="isSaving"
+        :isTesting="isTesting"
+        :onenetConnected="onenetConnected"
+        :cloudConnected="cloudConnected"
+        @fillMqttHistory="showConfigList"
+        @toggleMqtt="isConnected ? disconnect() : connectAndSubscribe()"
+        @saveCloud="saveCloudConfig"
+        @clearDatabase="confirmClearDatabase"
+        @toggleCloud="toggleCloudPlatform"
+      />
+    </view>
+
+    <!-- 中列：设备列表 -->
+    <view class="middle-column">
+      <view class="column-title">设备列表</view>
+      <view class="device-header">
+        <input class="search-input" v-model="searchKeyword" placeholder="搜索设备名称" />
+        <button class="search-btn" @click="searchDevices">搜索</button>
+      </view>
+      <scroll-view class="Device_List_view" scroll-y>
+        <view v-if="filteredDevices.length === 0" class="empty-tip">暂无设备</view>
+        <view 
+          v-for="device in filteredDevices" 
+          :key="device.deviceId" 
+          class="device-item"
+        >
+          <view class="device-info">
+            <view :class="['status-dot', device.isOnline ? 'online' : 'offline']"></view>
+            <text class="device-name">{{ device.name }}</text>
+          </view>
+          <view class="device-actions">
+            <text class="action-btn" @click.stop="editDeviceName(device)">修改</text>
+            <text class="action-btn" @click.stop="confirmDeleteDevice(device)">删除</text>
+            <text class="action-btn" @click.stop="viewDeviceDetail(device)">详情</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- 右列：JSON消息显示 + 统计卡片 -->
+    <view class="right-column">
+      <view class="column-title">系统状态</view>
+      <!-- 统计卡片区域 -->
+      <view class="Device_Number">
+		  <view class="time-display">{{ currentTime }}</view>
+        <view class="stats-grid">
+          <view class="stat-card">
+            <text class="stat-value">{{ stats.totalDevices }}</text>
+            <text class="stat-label">总设备</text>
+          </view>
+          <view class="stat-card">
+            <text class="stat-value online">{{ stats.onlineDevices }}</text>
+            <text class="stat-label">在线</text>
+          </view>
+          <view class="stat-card">
+            <text class="stat-value offline">{{ stats.offlineDevices }}</text>
+            <text class="stat-label">离线</text>
+          </view>
+          <view class="stat-card">
+            <text class="stat-value">{{ stats.totalSensorRecords }}</text>
+            <text class="stat-label">数据条数</text>
+          </view>
+        </view>
+      </view>
+      <view class="column-title">实时数据</view>
+      <!-- JSON消息区域 -->
+      <view class="subcribe_json">
+        <scroll-view class="json-scroll" scroll-y>
+          <view v-if="jsonMessages.length === 0" class="empty-tip">暂无消息</view>
+          <view v-for="(msg, index) in jsonMessages" :key="index" class="json-item">
+            <view class="json-meta">
+              <text class="json-topic">{{ msg.topic }}</text>
+              <text class="json-time">{{ msg.time }}</text>
+            </view>
+            <view class="json-body">
+              <text class="json-text">{{ msg.payload }}</text>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
+
+    <!-- 阈值报警通知（全局） -->
+    <view v-if="alarmNotifications.length > 0" class="alarm-float">
+      <view v-for="alarm in alarmNotifications" :key="alarm.id" class="alarm-card">
+        <view class="alarm-card-head">
+          <text class="alarm-icon">⚠</text>
+          <text class="alarm-title">{{ alarm.deviceName }} - {{ alarm.displayName }} 阈值报警</text>
+          <text class="alarm-close" @click="removeAlarmNotification(alarm.id)">✕</text>
+        </view>
+        <text class="alarm-detail">{{ alarm.message }}</text>
+        <text class="alarm-time">{{ alarm.time }}</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup>
+import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import Paho from 'paho-mqtt'
+import {
+  getMqttConfigs, saveMqttConfig, clearDatabase,
+  saveMqttMessage, saveSensorData, getDevices, updateDeviceName, deleteDevice,
+  getStats, updateSpecialDeviceName, deleteSpecialDevice, request
+} from '@/utils/api.js'
+import { setBackendIp } from '@/utils/config.js'
+import ConfigPanel from './components/ConfigPanel.uvue'
+import { usePlatformConfig } from '@/hooks/usePlatformConfig.js'
+import { alarmNotifications, removeAlarmNotification } from '@/hooks/useAlarmCenter.js'
+import { testConnection as testCloudApi, saveConfig as saveCloudApi, connectOnenet, disconnectOnenet, connectAliyun, disconnectAliyun, connectGizwits, disconnectGizwits, connectHuawei, disconnectHuawei } from '@/utils/cloud-api.js'
+
+// 平台配置 hook
+const {
+  platformType, mqttConfig, cloudConfig, isSaving, isTesting,
+  currentCloudFields, loadMqttHistory
+} = usePlatformConfig()
+
+// MQTT 连接状态
+const isConnected = ref(false)
+const jsonMessages = ref([])
+let mqttClient = null
+
+// 设备列表相关
+const searchKeyword = ref('')
+const devices = ref([])
+const filteredDevices = ref([])
+let timer = null
+let timeTimer = null
+
+// 当前时间字符串
+const currentTime = ref('')
+
+// 更新时间显示
+const updateCurrentTime = () => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = (now.getMonth() + 1).toString().padStart(2, '0')
+  const day = now.getDate().toString().padStart(2, '0')
+  const hours = now.getHours().toString().padStart(2, '0')
+  const minutes = now.getMinutes().toString().padStart(2, '0')
+  const seconds = now.getSeconds().toString().padStart(2, '0')
+  currentTime.value = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+}
+
+// 统计相关
+const stats = ref({
+  totalDevices: 0,
+  onlineDevices: 0,
+  offlineDevices: 0,
+  totalSensorRecords: 0
+})
+
+// 工具函数
+const formatTime = (date) => {
+  const y = date.getFullYear()
+  const m = (date.getMonth() + 1).toString().padStart(2, '0')
+  const d = date.getDate().toString().padStart(2, '0')
+  const h = date.getHours().toString().padStart(2, '0')
+  const min = date.getMinutes().toString().padStart(2, '0')
+  const s = date.getSeconds().toString().padStart(2, '0')
+  return `${y}-${m}-${d} ${h}:${min}:${s}`
+}
+
+const scrollToBottom = () => {
+  nextTick(() => {
+    const el = document.querySelector('.json-scroll')
+    if (el) { el.scrollTop = el.scrollHeight; return }
+    try {
+      uni.createSelectorQuery().select('.json-scroll').boundingClientRect().exec((res: any) => {
+        if (res && res[0]) {
+          const scrollView = document.querySelector('.json-scroll')
+          if (scrollView) scrollView.scrollTop = scrollView.scrollHeight
+        }
+      })
+    } catch (e) { /* element not rendered */ }
+  })
+}
+
+// 提取设备编号（末尾连续数字）
+const extractDeviceId = (sensorName) => {
+  const match = sensorName.match(/(\d+)$/)
+  return match ? parseInt(match[1], 10) : null
+}
+
+// 清理传感器名称（去掉末尾数字）
+const cleanSensorName = (sensorName) => {
+  return sensorName.replace(/\d+$/, '')
+}
+
+// 判断 JSON 中是否有键名不以数字结尾
+const hasKeyWithoutNumber = (jsonObj) => {
+  return Object.keys(jsonObj).some(key => !/\d+$/.test(key.trim()))
+}
+
+// 加载设备列表（后端应返回包含 deviceType 字段）
+const loadDevices = async () => {
+  try {
+    const data = await getDevices()
+    devices.value = data.map(item => ({
+      deviceId: item.device_id,
+      name: item.name || (item.deviceType === 'special' ? `特殊设备${item.device_id}` : `设备${item.device_id}`),
+      lastTimestamp: item.last_timestamp,
+      deviceType: item.deviceType,
+      isOnline: false,
+      lastTimeStr: ''
+    }))
+    updateOnlineStatus()
+  } catch (err) {
+    console.error('加载设备列表失败', err)
+  }
+}
+
+// 加载统计数据
+const loadStats = async () => {
+  try {
+    const data = await getStats()
+    stats.value = data
+  } catch (err) {
+    console.error('加载统计失败', err)
+  }
+}
+
+// 更新在线状态
+const updateOnlineStatus = () => {
+  const now = Date.now()
+  devices.value.forEach(device => {
+    const online = (now - device.lastTimestamp) <= 11000
+    device.isOnline = online
+    if (device.lastTimestamp) {
+      const date = new Date(device.lastTimestamp)
+      device.lastTimeStr = `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}:${date.getSeconds().toString().padStart(2,'0')}`
+    } else {
+      device.lastTimeStr = '从未上报'
+    }
+  })
+  filterDevices()
+}
+
+const filterDevices = () => {
+  const kw = searchKeyword.value.trim().toLowerCase()
+  if (!kw) {
+    filteredDevices.value = [...devices.value]
+  } else {
+    filteredDevices.value = devices.value.filter(device => 
+      device.name.toLowerCase().includes(kw)
+    )
+  }
+}
+
+const searchDevices = () => {
+  filterDevices()
+}
+
+// 处理MQTT消息（已修正：等待存储完成再刷新）
+const processMqttMessage = async (payload) => {
+  let jsonData
+  try {
+    jsonData = JSON.parse(payload)
+  } catch (e) {
+    console.error('JSON解析失败', e)
+    return
+  }
+  // 存储最新数据供智能判定和发布消息使用
+  lastMqttData.value = jsonData
+  try { uni.setStorageSync('lastMqttData', JSON.stringify(jsonData)) } catch (e) {}
+  const now = Date.now()
+  const nowStr = formatTime(new Date())
+
+  if (hasKeyWithoutNumber(jsonData)) {
+    // 特殊设备：整条存储，拿到 deviceId 后再存 MQTT 原始消息
+    try {
+      const result = await request({
+        url: '/special-data',
+        method: 'POST',
+        data: { jsonData, timestamp: now }
+      })
+      const specialDeviceId = result.data?.data?.deviceId
+      if (specialDeviceId) {
+        saveMqttMessage(jsonData, nowStr, now, specialDeviceId, 'special').catch(() => {})
+      }
+    } catch (err) {
+      console.error('存储特殊设备数据失败', err)
+    }
+    await loadDevices()
+    await loadStats()
+    return
+  }
+
+  // 普通设备：拆分存储，收集去重后的 deviceId 列表
+  const savePromises = []
+  const deviceIds = new Set()
+  for (const [key, val] of Object.entries(jsonData)) {
+    const deviceId = extractDeviceId(key)
+    if (deviceId === null) continue
+    deviceIds.add(deviceId)
+    const sensorName = cleanSensorName(key) || key
+    savePromises.push(saveSensorData(deviceId, sensorName, val, now))
+  }
+  if (savePromises.length > 0) {
+    await Promise.all(savePromises)
+  }
+  // 为每个涉及的设备保存一条 MQTT 原始消息（设备隔离）
+  for (const did of deviceIds) {
+    saveMqttMessage(jsonData, nowStr, now, did, 'normal').catch(() => {})
+  }
+  // 刷新设备列表和统计
+  await loadDevices()
+  await loadStats()
+}
+
+// MQTT 连接
+const connectAndSubscribe = () => {
+  const cfg = mqttConfig.value
+  if (!cfg.brokerUrl || !cfg.port || !cfg.subTopic) {
+    uni.showToast({ title: '请填写完整连接信息', icon: 'none' })
+    return
+  }
+
+  const host = cfg.brokerUrl
+  const portNum = Number(cfg.port)
+  const clientID = cfg.clientId || 'uni-' + Math.random().toString(16).substr(2, 8)
+
+  mqttClient = new Paho.Client(host, portNum, '/mqtt', clientID)
+
+  mqttClient.onConnectionLost = (res) => {
+    console.log('连接断开', res.errorMessage)
+    isConnected.value = false
+    uni.showToast({ title: '连接已断开', icon: 'none' })
+  }
+
+  mqttClient.onMessageArrived = (message) => {
+    console.log('收到消息:', message.destinationName, message.payloadString)
+    jsonMessages.value.push({
+      topic: message.destinationName,
+      payload: message.payloadString,
+      time: formatTime(new Date())
+    })
+    nextTick(() => scrollToBottom())
+    processMqttMessage(message.payloadString)
+  }
+
+  mqttClient.connect({
+    onSuccess: () => {
+      console.log('连接成功')
+      isConnected.value = true
+      uni.showToast({ title: '连接成功', icon: 'success' })
+      const hostMatch = cfg.brokerUrl.match(/^(?:[a-z]+:\/\/)?([^:/]+)/i)
+      if (hostMatch) {
+        setBackendIp(hostMatch[1])
+        // 记录当前订阅的 broker，供设备详情页开关发送使用
+        uni.setStorageSync('activeBrokerHost', hostMatch[1])
+        uni.setStorageSync('activeBrokerPort', portNum)
+        uni.setStorageSync('activeBrokerTopic', cfg.subTopic)
+      }
+      const config = {
+        config_type: 'subscribe',
+        client_id: clientID,
+        broker_url: cfg.brokerUrl,
+        port: portNum,
+        qos: Number(cfg.qos) || 0,
+        topic: cfg.subTopic
+      }
+      saveMqttConfig(config).catch(err => console.error('保存配置失败', err))
+      mqttClient.subscribe(cfg.subTopic, { qos: Number(cfg.qos) || 0 })
+    },
+    onFailure: (err) => {
+      console.error('连接失败:', err.errorMessage)
+      uni.showToast({ title: '连接失败: ' + err.errorMessage, icon: 'error' })
+    },
+    useSSL: portNum === 8084 || portNum === 8884,
+    timeout: 3,
+    keepAliveInterval: 30,
+  })
+}
+
+const disconnect = () => {
+  if (mqttClient) {
+    mqttClient.disconnect()
+    mqttClient = null
+  }
+  isConnected.value = false
+  // 断开时清除当前订阅的 broker 记录，详情页据此停止实时直连
+  uni.removeStorageSync('activeBrokerHost')
+  uni.removeStorageSync('activeBrokerPort')
+  uni.removeStorageSync('activeBrokerTopic')
+  uni.showToast({ title: '已断开连接', icon: 'success' })
+}
+
+// 填充历史配置
+const showConfigList = async () => {
+  try {
+    const configs = await loadMqttHistory()
+    if (!configs.length) {
+      uni.showToast({ title: '暂无历史配置', icon: 'none' })
+      return
+    }
+    const items = configs.map(c => `${c.client_id} | ${c.broker_url}:${c.port} | ${c.topic}`)
+    uni.showActionSheet({
+      title: '选择历史配置',
+      itemList: items,
+      success: (res) => {
+        const selected = configs[res.tapIndex]
+        mqttConfig.value.clientId = selected.client_id
+        mqttConfig.value.brokerUrl = selected.broker_url
+        mqttConfig.value.port = String(selected.port)
+        mqttConfig.value.qos = String(selected.qos)
+        mqttConfig.value.subTopic = selected.topic
+        uni.showToast({ title: '已填充', icon: 'success' })
+      }
+    })
+  } catch (err) {
+    uni.showToast({ title: '获取配置失败', icon: 'error' })
+  }
+}
+
+// 云平台 — 保存配置
+const saveCloudConfig = async () => {
+  isSaving.value = true
+  try {
+    await saveCloudApi(platformType.value, cloudConfig.value)
+    uni.showToast({ title: '保存成功', icon: 'success' })
+  } catch (e) {
+    uni.showToast({ title: '保存失败', icon: 'error' })
+  } finally {
+    isSaving.value = false
+  }
+}
+
+// 云平台 — 手动连接/断开
+const onenetConnected = ref(false)
+const cloudConnected = ref(false)
+
+const lastMqttData = ref(null)
+
+const toggleCloudPlatform = async () => {
+  const platform = platformType.value
+  if (cloudConnected.value) {
+    // 断开
+    try {
+      if (platform === 'onenet') await disconnectOnenet()
+      else if (platform === 'aliyun') await disconnectAliyun()
+      else if (platform === 'gizwits') await disconnectGizwits()
+      else if (platform === 'huawei') await disconnectHuawei()
+      cloudConnected.value = false
+      uni.showToast({ title: '已断开', icon: 'success' })
+    } catch (e) {
+      uni.showToast({ title: '断开失败', icon: 'error' })
+    }
+  } else {
+    // 先保存配置再连接
+    try {
+      await saveCloudApi(platform, cloudConfig.value)
+    } catch (e) {}
+    try {
+      if (platform === 'onenet') {
+        const res = await connectOnenet()
+        if (res.data.code === 200) { cloudConnected.value = true; uni.showToast({ title: '已连接', icon: 'success' }) }
+        else { uni.showToast({ title: res.data.message, icon: 'error' }) }
+      } else if (platform === 'aliyun') {
+        const res = await connectAliyun()
+        if (res.data.code === 200) { cloudConnected.value = true; uni.showToast({ title: '已连接', icon: 'success' }) }
+        else { uni.showToast({ title: res.data.message, icon: 'error' }) }
+      } else if (platform === 'gizwits') {
+        const res = await connectGizwits()
+        if (res.data.code === 200) { cloudConnected.value = true; uni.showToast({ title: '已连接', icon: 'success' }) }
+        else { uni.showToast({ title: res.data.message, icon: 'error' }) }
+      } else if (platform === 'huawei') {
+        const res = await connectHuawei()
+        if (res.data.code === 200) { cloudConnected.value = true; uni.showToast({ title: '已连接', icon: 'success' }) }
+        else { uni.showToast({ title: res.data.message, icon: 'error' }) }
+      }
+    } catch (e) {
+      uni.showToast({ title: '连接失败', icon: 'error' })
+    }
+  }
+}
+
+// 云平台 — 测试连接
+const testCloudConnection = async () => {
+  isTesting.value = true
+  try {
+    const ok = await testCloudApi(platformType.value)
+    if (ok) {
+      uni.showToast({ title: '连接成功', icon: 'success' })
+    } else {
+      uni.showToast({ title: '连接失败，请检查配置', icon: 'error' })
+    }
+  } catch (e) {
+    uni.showToast({ title: '测试失败: ' + (e.message || '网络错误'), icon: 'error' })
+  } finally {
+    isTesting.value = false
+  }
+}
+
+// 清空数据库
+const confirmClearDatabase = () => {
+  uni.showModal({
+    title: '确认清空',
+    content: '此操作将清空所有表数据（包括配置表），不可恢复。确定继续吗？',
+    confirmText: '清空',
+    confirmColor: '#ff3b30',
+    success: async (res) => {
+      if (res.confirm) {
+        uni.showLoading({ title: '清空中...', mask: true })
+        try {
+          await clearDatabase()
+          uni.hideLoading()
+          uni.showToast({ title: '数据库已清空', icon: 'success' })
+          jsonMessages.value = []
+          await loadDevices()
+          await loadStats()
+        } catch (err) {
+          uni.hideLoading()
+          uni.showToast({ title: err.message || '清空失败', icon: 'error' })
+        }
+      }
+    }
+  })
+}
+
+// 修改设备名称（根据 deviceType 调用不同接口）
+const editDeviceName = (device) => {
+  uni.showModal({
+    title: '修改设备名称',
+    editable: true,
+    placeholderText: device.name,
+    success: async (res) => {
+      if (res.confirm && res.content) {
+        try {
+          if (device.deviceType === 'special') {
+            await updateSpecialDeviceName(device.deviceId, res.content)
+          } else {
+            await updateDeviceName(device.deviceId, res.content)
+          }
+          uni.showToast({ title: '修改成功', icon: 'success' })
+          await loadDevices()
+        } catch (err) {
+          uni.showToast({ title: '修改失败', icon: 'error' })
+        }
+      }
+    }
+  })
+}
+
+// 删除设备（根据 deviceType 调用不同接口）
+const confirmDeleteDevice = (device) => {
+  uni.showModal({
+    title: '确认删除',
+    content: `确定要删除设备“${device.name}”及其所有数据吗？此操作不可恢复。`,
+    confirmColor: '#ff3b30',
+    success: async (res) => {
+      if (res.confirm) {
+        uni.showLoading({ title: '删除中...', mask: true })
+        try {
+          if (device.deviceType === 'special') {
+            await deleteSpecialDevice(device.deviceId)
+          } else {
+            await deleteDevice(device.deviceId)
+          }
+          uni.hideLoading()
+          uni.showToast({ title: '删除成功', icon: 'success' })
+          await loadDevices()
+          await loadStats()
+        } catch (err) {
+          uni.hideLoading()
+          uni.showToast({ title: '删除失败', icon: 'error' })
+        }
+      }
+    }
+  })
+}
+
+// 查看详情（跳转页面）
+const viewDeviceDetail = (device) => {
+  uni.navigateTo({
+    url: `/pages/device-detail/device-detail?deviceId=${device.deviceId}&name=${encodeURIComponent(device.name)}&type=${device.deviceType}`
+  })
+}
+
+onMounted(() => {
+  uni.$on('platform-change', (val) => { platformType.value = val })
+  loadDevices()
+  loadStats()
+  updateCurrentTime()
+  timer = setInterval(() => {
+    loadDevices()
+    loadStats()
+  }, 1000)
+  timeTimer = setInterval(() => {
+    updateCurrentTime()
+  }, 1000)
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+  if (timeTimer) clearInterval(timeTimer)
+  uni.$off('platform-change')
+})
+</script>
+
+<style lang="scss">
+	/* 栏目标题样式 */
+	.column-title {
+	  font-size: 28rpx;
+	  color: #666;
+	  padding: 12rpx 20rpx 6rpx 20rpx;
+	  border-bottom: 1rpx solid #f0f0f0;
+	  background-color: #fafafa;
+	  font-weight: normal;
+	  text-align: left;
+	}
+.page-container {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.left-column {
+  width: 420rpx;
+  flex-shrink: 0;
+  border-right: 2rpx solid #eee;
+  background-color: #fff;
+  margin: 10rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
+}
+
+.middle-column {
+  flex: 1;
+  border-right: 2rpx solid #eee;
+  background-color: #fff;
+  margin: 10rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.right-column {
+  width: 620rpx;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: #fff;
+  margin: 10rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
+}
+
+.Device_Number {
+  height: 55%;
+  border-bottom: 2rpx solid #eee;
+  padding: 20rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.subcribe_json {
+  flex: 1;
+  padding: 10rpx;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.stats-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+  justify-content: space-between;
+}
+
+.stat-card {
+  flex: 1;
+  min-width: 120rpx;
+  background: #f8f8f8;
+  border-radius: 16rpx;
+  padding: 20rpx 10rpx;
+  text-align: center;
+  box-shadow: 0 2rpx 6rpx rgba(0,0,0,0.05);
+}
+
+.stat-value {
+  display: block;
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #333;
+  line-height: 1.2;
+  margin-bottom: 8rpx;
+}
+
+.stat-value.online {
+  color: #4cd964;
+}
+.stat-value.offline {
+  color: #ff3b30;
+}
+
+.stat-label {
+  font-size: 24rpx;
+  color: #999;
+}
+
+
+.json-scroll {
+  height: 100%;
+  padding-bottom: 40rpx;
+}
+
+.mqtt_config {
+  padding: 20rpx;
+}
+
+.minput_client {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 10rpx 0;
+  width: 100%;
+  box-sizing: border-box;
+  
+  .input_client_kehu {
+    width: 160rpx;
+    flex-shrink: 0;
+    text-align: right;
+    margin-right: 10rpx;
+    font-size: 24rpx;
+    white-space: nowrap;
+  }
+  
+  .input_client {
+    flex: 1;
+    min-width: 0;
+    border: 2rpx solid #000;
+    border-radius: 8rpx;
+    padding: 4rpx 8rpx;
+    height: 50rpx;
+    font-size: 19rpx;
+    box-sizing: border-box;
+  }
+}
+
+.button-row {
+  display: flex;
+  flex-direction: row;
+  gap: 20rpx;
+  margin-top: 20rpx;
+  
+  .fill-btn, .mqtt_connect {
+    flex: 1;
+    height: 60rpx;
+    line-height: 60rpx;
+    border-radius: 12rpx;
+    font-size: 19rpx;
+    color: #fff;
+    border: none;
+  }
+  .fill-btn { background-color: #5856d6; }
+  .mqtt_connect { background-color: #007aff; }
+}
+
+.clear-btn-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 20rpx;
+  
+  .clear-btn {
+    font-size: 24rpx;
+    color: #ff3b30;
+    text-decoration: underline;
+    padding: 10rpx 20rpx;
+  }
+}
+
+.device-header {
+  display: flex;
+  flex-direction: row;
+  padding: 10rpx;
+  gap: 10rpx;
+  border-bottom: 1rpx solid #eee;
+  
+  .search-input {
+    flex: 7;
+    min-width: 0;
+    height: 60rpx;
+    border: 1rpx solid #ccc;
+    border-radius: 8rpx;
+    padding: 0 16rpx;
+    box-sizing: border-box;
+  }
+  
+  .search-btn {
+    flex: 3;
+    height: 60rpx;
+    background: #007aff;
+    color: white;
+    border-radius: 8rpx;
+    line-height: 60rpx;
+    text-align: center;
+    font-size: 28rpx;
+  }
+}
+
+.Device_List_view {
+  flex: 1;
+  height: 0;
+}
+
+.device-item {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: nowrap;
+  padding: 20rpx;
+  margin: 0 0 10rpx 10rpx;
+  margin-right: 12rpx;
+  border-radius: 16rpx;
+  background-color: #fff;
+  box-shadow: 0 2rpx 13rpx rgba(0, 0, 0, 0.1);
+  width: 99%;
+  box-sizing: border-box;
+  
+  .device-info {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 16rpx;
+    flex: 1;
+    min-width: 0;
+    
+    .status-dot {
+      width: 20rpx;
+      height: 20rpx;
+      border-radius: 50%;
+      flex-shrink: 0;
+      
+      &.online { background-color: #4cd964; }
+      &.offline { background-color: #ff3b30; }
+    }
+    
+    .device-name {
+      font-size: 28rpx;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+  
+  .device-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 24rpx;
+    flex-shrink: 0;
+    
+    .action-btn {
+      font-size: 24rpx;
+      padding: 4rpx 8rpx;
+      
+      &:active {
+        opacity: 0.6;
+      }
+      
+      &:nth-child(1) { color: #ff9500; }
+      &:nth-child(2) { color: #ff3b30; }
+      &:nth-child(3) { color: #007aff; }
+    }
+  }
+}
+
+.json-item {
+  padding: 10rpx;
+  border-bottom: 1rpx solid #eee;
+  background-color: #fafafa;
+  margin-bottom: 4rpx;
+  border-radius: 6rpx;
+}
+.json-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 20rpx;
+  color: #666;
+}
+.json-body .json-text {
+  font-size: 22rpx;
+  font-family: monospace;
+  word-break: break-all;
+}
+.empty-tip {
+  text-align: center;
+  color: #999;
+  padding: 40rpx 0;
+}
+.time-display {
+  font-size: 28rpx;
+  color: #666;
+  margin-bottom: 20rpx;
+  text-align: center;
+}
+
+/* 全局阈值报警通知（悬浮右下角） */
+.alarm-float {
+  position: fixed;
+  right: 24rpx;
+  bottom: 24rpx;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  max-width: 520rpx;
+}
+.alarm-card {
+  background: #fff2f0;
+  border: 2rpx solid #ff4d4f;
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  animation: alarmIn 0.3s ease;
+}
+@keyframes alarmIn {
+  from { opacity: 0; transform: translateX(-20rpx); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.alarm-card-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8rpx;
+}
+.alarm-icon {
+  font-size: 28rpx;
+}
+.alarm-title {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #ff4d4f;
+}
+.alarm-detail {
+  font-size: 22rpx;
+  color: #666;
+  word-break: break-all;
+}
+.alarm-close {
+  margin-left: auto;
+  font-size: 24rpx;
+  color: #999;
+  padding: 0 4rpx;
+}
+.alarm-time {
+  font-size: 20rpx;
+  color: #999;
+}
+
+</style>

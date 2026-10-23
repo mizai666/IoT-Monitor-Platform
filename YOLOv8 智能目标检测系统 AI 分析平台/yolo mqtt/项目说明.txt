@@ -1,0 +1,236 @@
+# YOLOv8 智能目标检测系统
+
+## 项目简介
+
+本项目是一个基于 YOLOv8 的实时目标检测系统，支持多路 RTSP 视频流处理、MQTT 消息发布和 Web 可视化，具备 GPU 加速功能。系统设计为工业级多路视频 AI 分析平台，适用于安防监控、交通管理、智能制造等场景。
+
+## 核心功能
+
+### 1. 实时目标检测
+- 使用 YOLOv8 模型进行实时目标检测
+- 支持 80 个类别的目标识别
+- GPU 加速推理，提高检测速度
+
+### 2. 多路视频处理
+- 支持 1-3 路 RTSP 摄像头并行处理
+- 每路独立线程，一路异常不影响整体
+- 低延迟设计，实时显示检测结果
+
+### 3. MQTT 消息发布
+- 按摄像头分主题发布检测结果
+- 支持上传图片检测和截图检测的结果发布
+- 消息格式标准化，便于其他系统集成
+
+### 4. Web 可视化
+- 实时视频流显示
+- 检测框和标签实时标注
+- 系统状态监控
+- 上传图片检测功能
+- 摄像头截图检测功能
+- 响应式设计，支持多种设备访问
+
+## 技术栈
+
+| 模块 | 技术 |
+|------|------|
+| 检测模型 | YOLOv8 |
+| 视频拉取 | OpenCV + RTSP |
+| 推理加速 | PyTorch / CUDA |
+| 消息协议 | MQTT (paho-mqtt) |
+| Web 服务 | Flask + SocketIO |
+| 前端 | HTML + JavaScript |
+| 并发 | Python 多线程 |
+
+## 项目结构
+
+```
+yolo/
+├── models/            # 模型文件目录
+│   └── yolov8x.pt     # YOLOv8 模型
+├── templates/         # 前端模板
+│   └── index.html     # Web 界面
+├── config.py          # 系统配置
+├── main.py            # 系统主程序
+├── yolo_detector.py   # YOLO 检测器
+├── rtsp_processor.py  # RTSP 流处理器
+├── mqtt_publisher.py  # MQTT 发布器
+├── web_server.py      # Web 服务器
+├── utils.py           # 工具函数
+├── 项目说明.txt        # 项目说明文档
+└── start.bat          # 启动脚本
+```
+
+## 安装说明
+
+### 1. 环境要求
+- Python 3.8+
+- CUDA 11.7+ (用于 GPU 加速)
+- NVIDIA 显卡 (推荐)
+
+### 2. 依赖安装
+
+```bash
+# 安装基础依赖
+pip install opencv-python paho-mqtt flask flask-socketio
+
+# 安装 PyTorch (支持 CUDA)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu131
+
+# 安装 YOLOv8
+pip install ultralytics
+```
+
+### 3. 模型准备
+- 下载 YOLOv8 模型文件 (yolov8x.pt) 到 models 目录
+- 或使用其他 YOLOv8 系列模型
+
+## 配置说明
+
+编辑 `config.py` 文件，修改以下配置：
+
+### 1. 摄像头配置
+```python
+RTSP_CAMERAS = [
+    {'id': 1, 'url': 'rtsp://admin:123456@192.168.1.108:554/stream1'},
+    {'id': 2, 'url': 'rtsp://admin:123456@192.168.1.109:554/stream1'},
+    {'id': 3, 'url': 'rtsp://admin:123456@192.168.1.110:554/stream1'}
+]
+```
+
+### 2. YOLO 配置
+```python
+YOLO_CONFIG = {
+    'model_path': './models/yolov8x.pt',
+    'device': 'cuda:0',  # 使用 GPU
+    'confidence_threshold': 0.4,
+    'iou_threshold': 0.5
+}
+```
+
+### 3. MQTT 配置
+```python
+MQTT_CONFIG = {
+    'broker': 'localhost',
+    'port': 1883,
+    'client_id': 'yolov8-detector',
+    'username': None,
+    'password': None
+}
+```
+
+### 4. Web 配置
+```python
+WEB_CONFIG = {
+    'host': '0.0.0.0',
+    'port': 9000,
+    'debug': False
+}
+```
+
+## 使用方法
+
+### 1. 启动系统
+
+#### 方法一：直接运行
+```bash
+python main.py
+```
+
+#### 方法二：使用启动脚本
+```bash
+start.bat
+```
+
+### 2. 访问 Web 界面
+打开浏览器访问：
+```
+http://localhost:9000
+```
+
+### 3. MQTT 消息订阅
+使用 MQTT 客户端订阅以下主题：
+- `yolov8/camera/1` - 摄像头 1 的检测结果
+- `yolov8/camera/2` - 摄像头 2 的检测结果
+- `yolov8/camera/3` - 摄像头 3 的检测结果
+- `yolov8/camera/0` - 上传图片和截图的检测结果
+- `yolov8/camera/#` - 所有检测结果
+
+### 4. 功能使用
+
+#### 实时检测
+- 系统会自动连接配置的 RTSP 摄像头
+- Web 界面会实时显示检测结果
+- 检测结果会通过 MQTT 发布
+
+#### 上传图片检测
+- 在 Web 界面的 "上传图片检测" 面板中
+- 点击 "选择图片" 按钮上传本地图片
+- 系统会自动进行检测并显示结果
+- 检测结果会通过 MQTT 发布
+
+#### 摄像头截图检测
+- 在 Web 界面的 "摄像头截图检测" 面板中
+- 点击对应摄像头的 "截图" 按钮
+- 系统会截取当前画面并进行检测
+- 检测结果会通过 MQTT 发布
+
+## MQTT 消息格式
+
+```json
+{
+  "time": "2026-04-14 23:05:17",
+  "cam": 1,  // 摄像头 ID，0 表示上传图片或截图
+  "count": 2,  // 检测到的目标数量
+  "objects": [
+    {
+      "class": "person",
+      "conf": 0.89,
+      "bbox": [100, 200, 300, 500]
+    },
+    {
+      "class": "car",
+      "conf": 0.78,
+      "bbox": [400, 300, 600, 450]
+    }
+  ]
+}
+```
+
+## 系统状态监控
+
+Web 界面顶部的状态条显示以下信息：
+- 系统状态
+- 活跃摄像头数量
+- 总检测目标数
+- 平均 FPS
+- GPU 利用率
+
+## 故障排除
+
+### 1. CUDA 不可用
+- 检查 NVIDIA 驱动是否安装
+- 检查 CUDA 版本是否匹配
+- 确保安装了支持 CUDA 的 PyTorch 版本
+
+### 2. RTSP 连接失败
+- 检查摄像头 IP 地址和端口是否正确
+- 检查摄像头用户名和密码是否正确
+- 确保网络连接正常
+
+### 3. MQTT 连接失败
+- 检查 MQTT broker 地址和端口是否正确
+- 确保 MQTT broker 正在运行
+- 检查网络连接正常
+
+### 4. Web 无法访问
+- 检查 Web 服务器端口是否被占用
+- 确保防火墙未阻止该端口
+- 检查系统是否正常运行
+
+## 性能优化
+
+1. **模型选择**：根据硬件性能选择合适的 YOLOv8 模型（yolov8n < yolov8s < yolov8m < yolov8l < yolov8x）
+2. **批量处理**：调整批量大小以充分利用 GPU
+3. **帧间隔**：对于不需要实时性的场景，可以设置帧间隔以减少计算量
+4. **分辨率**：降低视频分辨率可以提高处理速度
+

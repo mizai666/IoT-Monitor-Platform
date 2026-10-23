@@ -1,0 +1,229 @@
+<template>
+  <view class="config-panel">
+    <!-- 平台选择下拉 -->
+    <view class="column-title">平台配置</view>
+    <view class="minput_client">
+      <text class="input_client_kehu">选择平台:</text>
+      <picker class="platform-picker" :value="platformIndex" :range="platformLabels" @change="onPlatformChange">
+        <view class="picker-display">{{ platformLabels[platformIndex] }}</view>
+      </picker>
+    </view>
+
+    <!-- 本地MQTT表单 -->
+    <view v-if="!isCloudPlatform" class="mqtt_config">
+      <view class="minput_client">
+        <text class="input_client_kehu">客户端ID:</text>
+        <input type="text" class="input_client" placeholder="请输入" v-model="mqttConfig.clientId" />
+      </view>
+      <view class="minput_client">
+        <text class="input_client_kehu">连接地址:</text>
+        <input type="text" class="input_client" placeholder="broker.emqx.io" v-model="mqttConfig.brokerUrl" />
+      </view>
+      <view class="minput_client">
+        <text class="input_client_kehu">端口号:</text>
+        <input type="text" class="input_client" placeholder="端口号" v-model="mqttConfig.port" />
+      </view>
+      <view class="minput_client">
+        <text class="input_client_kehu">Qos:</text>
+        <input type="text" class="input_client" placeholder="0/1/2" v-model="mqttConfig.qos" />
+      </view>
+      <view class="minput_client">
+        <text class="input_client_kehu">订阅号:</text>
+        <input type="text" class="input_client" placeholder="请输入订阅主题" v-model="mqttConfig.subTopic" />
+      </view>
+
+      <view class="button-row">
+        <button class="fill-btn" @click="$emit('fillMqttHistory')">填充</button>
+        <button class="mqtt_connect" @click="$emit('toggleMqtt')">
+          {{ isConnected ? '断开连接' : '连接订阅' }}
+        </button>
+      </view>
+    </view>
+
+    <!-- 云平台表单 -->
+    <view v-if="isCloudPlatform" class="cloud_config">
+      <view class="minput_client" v-for="field in cloudFields" :key="field.key">
+        <text class="input_client_kehu">{{ field.label }}:</text>
+        <input
+          v-if="!field.password"
+          type="text"
+          class="input_client"
+          :placeholder="field.placeholder"
+          v-model="cloudConfig[field.key]"
+        />
+        <input
+          v-else
+          type="password"
+          class="input_client"
+          :placeholder="field.placeholder"
+          v-model="cloudConfig[field.key]"
+        />
+      </view>
+
+      <view class="button-row">
+        <button class="fill-btn" @click="$emit('saveCloud')" :disabled="isSaving">
+          {{ isSaving ? '保存中...' : '保存配置' }}
+        </button>
+        <button v-if="isCloudPlatform" class="mqtt_connect" @click="$emit('toggleCloud')">
+          {{ cloudConnected ? '断开' : '连接' }}
+        </button>
+      </view>
+      <view v-if="isCloudPlatform && cloudConnected" class="cloud-hint">
+        <text class="hint-title">{{ platformLabel }} REST API 模式</text>
+        <text class="hint-text">主动轮询获取设备数据</text>
+        <text class="hint-text">无需公网IP，无需内网穿透</text>
+        <text class="hint-text">每3秒自动拉取一次设备属性</text>
+      </view>
+
+    </view>
+
+    <!-- 清空数据库 -->
+    <view class="clear-btn-wrapper">
+      <text class="clear-btn" @click="$emit('clearDatabase')">清空数据库</text>
+    </view>
+  </view>
+</template>
+
+<script setup>
+import { computed } from 'vue'
+import { PLATFORM_TYPES } from '@/hooks/usePlatformConfig.js'
+
+const props = defineProps({
+  platformType: { type: String, default: 'local' },
+  mqttConfig: { type: Object, default: () => ({}) },
+  cloudConfig: { type: Object, default: () => ({}) },
+  cloudFields: { type: Array, default: () => [] },
+  isConnected: { type: Boolean, default: false },
+  isSaving: { type: Boolean, default: false },
+  isTesting: { type: Boolean, default: false },
+  onenetConnected: { type: Boolean, default: false },
+  cloudConnected: { type: Boolean, default: false }
+})
+
+defineEmits(['fillMqttHistory', 'toggleMqtt', 'saveCloud', 'clearDatabase', 'toggleCloud'])
+
+const platformLabels = PLATFORM_TYPES.map(p => p.label)
+const platformValues = PLATFORM_TYPES.map(p => p.value)
+
+const platformIndex = computed(() => {
+  const idx = platformValues.indexOf(props.platformType)
+  return idx >= 0 ? idx : 0
+})
+
+const isCloudPlatform = computed(() => props.platformType !== 'local')
+const platformLabel = computed(() => {
+  const p = PLATFORM_TYPES.find(t => t.value === props.platformType)
+  return p ? p.label : ''
+})
+
+
+function onPlatformChange(e) {
+  const idx = e.detail.value
+  const val = platformValues[idx]
+  // uniApp picker doesn't support v-model with emit well, use uni.$emit workaround
+  uni.$emit('platform-change', val)
+}
+</script>
+
+<style scoped>
+.config-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.platform-picker {
+  flex: 1;
+  min-width: 0;
+  border: 2rpx solid #007aff;
+  border-radius: 8rpx;
+  padding: 8rpx 12rpx;
+  height: 50rpx;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+.picker-display {
+  font-size: 24rpx;
+  color: #007aff;
+  width: 100%;
+}
+.mqtt_config, .cloud_config {
+  padding: 20rpx;
+}
+.minput_client {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 10rpx 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.minput_client .input_client_kehu {
+  width: 160rpx;
+  flex-shrink: 0;
+  text-align: right;
+  margin-right: 10rpx;
+  font-size: 24rpx;
+  white-space: nowrap;
+}
+.minput_client .input_client {
+  flex: 1;
+  min-width: 0;
+  border: 2rpx solid #000;
+  border-radius: 8rpx;
+  padding: 4rpx 8rpx;
+  height: 50rpx;
+  font-size: 19rpx;
+  box-sizing: border-box;
+}
+.button-row {
+  display: flex;
+  flex-direction: row;
+  gap: 20rpx;
+  margin-top: 20rpx;
+}
+.button-row .fill-btn, .button-row .mqtt_connect {
+  flex: 1;
+  height: 60rpx;
+  line-height: 60rpx;
+  border-radius: 12rpx;
+  font-size: 19rpx;
+  color: #fff;
+  border: none;
+}
+.button-row .fill-btn { background-color: #5856d6; }
+.button-row .mqtt_connect { background-color: #007aff; }
+.clear-btn-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 20rpx;
+}
+.clear-btn-wrapper .clear-btn {
+  font-size: 24rpx;
+  color: #ff3b30;
+  text-decoration: underline;
+  padding: 10rpx 20rpx;
+}
+.cloud-hint {
+  background: #f0f5ff;
+  border: 1rpx solid #1890ff;
+  border-radius: 8rpx;
+  padding: 16rpx;
+  margin: 10rpx 20rpx;
+}
+.hint-title {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #1890ff;
+  display: block;
+  margin-bottom: 8rpx;
+}
+.hint-text {
+  font-size: 20rpx;
+  color: #666;
+  display: block;
+  line-height: 1.6;
+}
+</style>

@@ -1,0 +1,13 @@
+train: E:\GraduationProject\ultralytics-main\mydatas\data\train\images
+val: E:\GraduationProject\ultralytics-main\mydatas\data\valid\images
+test: E:\GraduationProject\ultralytics-main\mydatas\data\test\images
+
+nc: 10
+names: ['bacterial-blight', 'bacterial-leaf-streak', 'blast', 'brown-spot', 'dead-heart', 'downy-mildew', 'false-smut', 'normal', 'sheath-blight', 'tungro']
+
+roboflow:
+  workspace: humayai-kacn9
+  project: humay.ai-rice-diseases
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/humayai-kacn9/humay.ai-rice-diseases/dataset/1

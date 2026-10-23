@@ -1,0 +1,169 @@
+# YOLOv8 智能目标检测系统 - 依赖安装说明
+
+## 基础依赖
+
+### 1. 核心依赖
+
+```bash
+# 安装 OpenCV (视频处理)
+pip install opencv-python
+
+# 安装 MQTT 客户端
+pip install paho-mqtt
+
+# 安装 Flask Web 框架
+pip install flask
+
+# 安装 SocketIO (实时通信)
+pip install flask-socketio
+
+# 安装 NumPy (数值计算)
+pip install numpy
+
+# 安装 ultralytics (YOLOv8 实现)
+pip install ultralytics
+```
+
+### 2. PyTorch 安装
+
+#### 方法一：使用 CUDA 版本 (推荐，用于 GPU 加速)
+```bash
+# CUDA 13.1 版本
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu131
+
+# 或 CUDA 12.1 版本
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+```
+
+#### 方法二：使用 CPU 版本 (无 GPU 时使用)
+```bash
+pip install torch torchvision
+```
+
+### 3. 可选依赖
+
+```bash
+# 安装 GPU 监控库
+pip install nvidia-ml-py3
+
+# 安装进度条库
+pip install tqdm
+
+# 安装日志库
+pip install loguru
+
+# 安装环境变量管理
+pip install python-dotenv
+```
+
+## 完整安装命令
+
+### 快速安装（一次性安装所有依赖）
+
+#### GPU 版本
+```bash
+pip install opencv-python paho-mqtt flask flask-socketio numpy ultralytics nvidia-ml-py3 tqdm loguru python-dotenv && pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+```
+
+#### CPU 版本
+```bash
+pip install opencv-python paho-mqtt flask flask-socketio numpy ultralytics tqdm loguru python-dotenv torch torchvision
+```
+
+## 验证安装
+
+### 检查 PyTorch 是否安装成功
+```bash
+python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+```
+
+### 检查 YOLOv8 是否安装成功
+```bash
+python -c "from ultralytics import YOLO; print('YOLOv8 安装成功')"
+```
+
+### 检查 OpenCV 是否安装成功
+```bash
+python -c "import cv2; print('OpenCV 版本:', cv2.__version__)"
+```
+
+## 常见问题
+
+### 1. 安装速度慢
+- 使用国内镜像源加速：
+  ```bash
+  pip install -i https://pypi.tuna.tsinghua.edu.cn/simple package-name
+  ```
+
+### 2. CUDA 版本不匹配
+- 检查 NVIDIA 驱动版本
+- 安装对应版本的 CUDA
+- 安装匹配的 PyTorch 版本
+
+### 3. 内存不足
+- 对于资源受限的设备，建议使用较小的 YOLOv8 模型
+- 可以考虑使用 `--no-cache-dir` 参数减少安装时的内存使用
+
+### 4. 权限问题
+- 在 Windows 上以管理员身份运行命令提示符
+- 在 Linux 上使用 sudo 命令
+
+## 环境要求
+
+### 硬件要求
+- **CPU**：至少 4 核
+- **内存**：至少 8GB
+- **GPU**：推荐 NVIDIA 显卡，至少 4GB 显存
+- **存储空间**：至少 10GB
+
+### 软件要求
+- **操作系统**：Windows 10+ 或 Linux
+- **Python**：3.8 或更高版本
+- **CUDA**：11.7 或更高版本（使用 GPU 时）
+
+## 依赖版本建议
+
+| 包名 | 推荐版本 | 用途 |
+|------|---------|------|
+| opencv-python | >=4.8.0 | 视频处理 |
+| paho-mqtt | >=1.6.1 | MQTT 客户端 |
+| flask | >=2.0.0 | Web 框架 |
+| flask-socketio | >=5.0.0 | WebSocket 支持 |
+| numpy | >=1.24.0 | 数值计算 |
+| ultralytics | >=8.0.0 | YOLOv8 实现 |
+| torch | >=2.0.0 | 深度学习框架 |
+| torchvision | >=0.15.0 | 视觉库 |
+
+
+
+## 离线安装
+
+### 1. 下载依赖包
+```bash
+pip download -d packages opencv-python paho-mqtt flask flask-socketio numpy ultralytics
+```
+
+正确安装命令（唯一能成功的）
+第一步：卸载旧的冲突包
+bash
+运行
+
+pip uninstall torch torchvision torchaudio -y
+
+第二步：安装支持 Python 3.13 + CUDA 12.8 （官方最新稳定版）
+bash
+运行
+
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+
+第三步：验证安装成功（必测）
+bash
+运行
+
+python -c "import torch; print('CUDA:', torch.cuda.is_available()); print('Torch:', torch.__version__)"
+
+成功输出
+plaintext
+
+CUDA: True
+Torch: 2.5.1+cu128

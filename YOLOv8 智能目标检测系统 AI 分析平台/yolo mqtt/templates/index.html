@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLOv8 智能目标检测系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+            animation: fadeInDown 1s ease-out;
+        }
+        
+        .header h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-weight: 700;
+        }
+        
+        .header .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            font-weight: 400;
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            animation: fadeIn 1s ease-out 0.2s both;
+        }
+        
+        .status-item {
+            background: rgba(255,255,255,0.2);
+            padding: 20px 30px;
+            border-radius: 30px;
+            color: white;
+            font-weight: 500;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.3);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            min-width: 150px;
+        }
+        
+        .status-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        }
+        
+        .status-item .label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 5px;
+            display: block;
+        }
+        
+        .status-item .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: block;
+        }
+        
+        .camera-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+            animation: fadeInUp 1s ease-out 0.4s both;
+        }
+        
+        .camera-box {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+        }
+        
+        .camera-box:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 45px rgba(0,0,0,0.25);
+        }
+        
+        .camera-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .camera-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+        
+        .camera-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95rem;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4757;
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 10px rgba(255,71,87,0.5);
+        }
+        
+        .status-dot.active {
+            background: #2ed573;
+            box-shadow: 0 0 10px rgba(46,213,115,0.5);
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        
+        .camera-frame-container {
+            position: relative;
+            background: #000;
+            height: 380px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .camera-frame {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transition: transform 0.5s ease;
+        }
+        
+        .camera-frame:hover {
+            transform: scale(1.02);
+        }
+        
+        .camera-stats {
+            display: flex;
+            justify-content: space-around;
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .stat-item {
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-item:hover {
+            transform: scale(1.05);
+        }
+        
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #667eea;
+            display: block;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-top: 8px;
+            display: block;
+        }
+        
+        .bottom-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 30px;
+            animation: fadeInUp 1s ease-out 0.6s both;
+        }
+        
+        .bottom-section:last-child {
+            margin-bottom: 0;
+        }
+        
+        @media (max-width: 1200px) {
+            .bottom-section {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .panel {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .panel:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 45px rgba(0,0,0,0.25);
+        }
+        
+        .panel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 25px;
+            font-weight: 600;
+            font-size: 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .panel-header .refresh-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.3s ease;
+        }
+        
+        .panel-header .refresh-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .log-container {
+            max-height: 350px;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .log-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .log-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        
+        .log-container::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
+        }
+        
+        .log-container::-webkit-scrollbar-thumb:hover {
+            background: #764ba2;
+        }
+        
+        .log-message {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            padding: 12px 16px;
+            margin: 8px 0;
+            border-radius: 12px;
+            border-left: 5px solid #667eea;
+            background: #f8f9fa;
+            animation: fadeIn 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .log-message::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            border-radius: 12px 0 0 12px;
+        }
+        
+        .log-message.error {
+            border-left-color: #ff4757;
+            background: #ffe6e6;
+        }
+        
+        .log-message.error::before {
+            background: #ff4757;
+        }
+        
+        .log-message.warning {
+            border-left-color: #ffa502;
+            background: #fff3cd;
+        }
+        
+        .log-message.warning::before {
+            background: #ffa502;
+        }
+        
+        .log-message.success {
+            border-left-color: #2ed573;
+            background: #e6f7ed;
+        }
+        
+        .log-message.success::before {
+            background: #2ed573;
+        }
+        
+        .log-time {
+            color: #6c757d;
+            font-size: 11px;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .detection-list {
+            max-height: 350px;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .detection-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .detection-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        
+        .detection-list::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
+        }
+        
+        .detection-list::-webkit-scrollbar-thumb:hover {
+            background: #764ba2;
+        }
+        
+        .mqtt-container {
+            max-height: 350px;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .mqtt-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .mqtt-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        
+        .mqtt-container::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
+        }
+        
+        .mqtt-container::-webkit-scrollbar-thumb:hover {
+            background: #764ba2;
+        }
+        
+        .mqtt-message {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            padding: 12px 16px;
+            margin: 8px 0;
+            border-radius: 12px;
+            border-left: 5px solid #667eea;
+            background: #f8f9fa;
+            animation: fadeIn 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .mqtt-message::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            border-radius: 12px 0 0 12px;
+        }
+        
+        .mqtt-message.camera-1 {
+            border-left-color: #2ed573;
+            background: #e6f7ed;
+        }
+        
+        .mqtt-message.camera-1::before {
+            background: #2ed573;
+        }
+        
+        .mqtt-message.camera-2 {
+            border-left-color: #ffa502;
+            background: #fff3cd;
+        }
+        
+        .mqtt-message.camera-2::before {
+            background: #ffa502;
+        }
+        
+        .mqtt-message.camera-3 {
+            border-left-color: #ff4757;
+            background: #ffe6e6;
+        }
+        
+        .mqtt-message.camera-3::before {
+            background: #ff4757;
+        }
+        
+        .mqtt-message.upload {
+            border-left-color: #667eea;
+            background: #f0f0ff;
+        }
+        
+        .mqtt-message.upload::before {
+            background: #667eea;
+        }
+        
+        .mqtt-time {
+            color: #6c757d;
+            font-size: 11px;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .mqtt-topic {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+            display: block;
+        }
+        
+        .mqtt-payload {
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: #555;
+        }
+        
+        .detection-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border-left: 5px solid #667eea;
+            animation: fadeIn 0.3s ease;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            position: relative;
+        }
+        
+        .detection-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .detection-class {
+            font-weight: 600;
+            color: #333;
+            font-size: 1rem;
+        }
+        
+        .detection-details {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .detection-confidence {
+            background: #667eea;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .detection-camera {
+            background: #f1f1f1;
+            color: #6c757d;
+            padding: 4px 8px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+        }
+        
+        .no-signal {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #6c757d;
+            animation: pulse 2s infinite;
+        }
+        
+        .no-signal-icon {
+            font-size: 5rem;
+            margin-bottom: 20px;
+        }
+        
+        .no-signal-text {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+        }
+        
+        .no-signal-subtext {
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+            padding: 20px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            animation: fadeIn 1s ease-out 0.8s both;
+        }
+        
+        .footer p {
+            margin: 5px 0;
+            opacity: 0.8;
+        }
+        
+        @media (max-width: 1200px) {
+            .camera-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .bottom-section {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .camera-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .status-bar {
+                gap: 15px;
+                justify-content: center;
+            }
+            
+            .status-item {
+                padding: 15px 20px;
+                min-width: 120px;
+            }
+            
+            .camera-frame-container {
+                height: 300px;
+            }
+            
+            .upload-area {
+                padding: 30px !important;
+            }
+            
+            .upload-area button {
+                padding: 12px 24px !important;
+                font-size: 1rem !important;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 1.6rem;
+            }
+            
+            .header .subtitle {
+                font-size: 1rem;
+            }
+            
+            .status-bar {
+                gap: 10px;
+            }
+            
+            .status-item {
+                min-width: 90px;
+                padding: 10px 14px;
+            }
+            
+            .status-item .value {
+                font-size: 1.1rem;
+            }
+            
+            .status-item .label {
+                font-size: 0.8rem;
+            }
+            
+            .camera-frame-container {
+                height: 220px;
+            }
+            
+            .upload-area {
+                padding: 20px !important;
+            }
+            
+            .upload-area button {
+                padding: 10px 20px !important;
+                font-size: 0.9rem !important;
+            }
+            
+            .panel-header {
+                padding: 15px 20px !important;
+                font-size: 1rem !important;
+            }
+            
+            .upload-container,
+            .screenshot-container {
+                padding: 15px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>YOLOv8 智能目标检测系统</h1>
+        <div class="subtitle">实时多路视频流 AI 分析平台</div>
+    </div>
+    
+    <div class="status-bar">
+        <div class="status-item">
+            <div class="label">系统状态</div>
+            <div class="value" id="system-status">运行中</div>
+        </div>
+        <div class="status-item">
+            <div class="label">活跃摄像头</div>
+            <div class="value" id="active-cameras">0/3</div>
+        </div>
+        <div class="status-item">
+            <div class="label">总检测目标</div>
+            <div class="value" id="total-detections">0</div>
+        </div>
+        <div class="status-item">
+            <div class="label">平均FPS</div>
+            <div class="value" id="fps">0</div>
+        </div>
+        <div class="status-item">
+            <div class="label">GPU利用率</div>
+            <div class="value" id="gpu-usage">0%</div>
+        </div>
+    </div>
+    
+    <div class="camera-container">
+        <div class="camera-box">
+            <div class="camera-header">
+                <div class="camera-title">摄像头 1</div>
+                <div class="camera-status">
+                    <div class="status-dot" id="status-dot-1"></div>
+                    <span id="status-text-1">离线</span>
+                </div>
+            </div>
+            <div class="camera-frame-container">
+                <img id="cam1" class="camera-frame" src="" alt="摄像头1" style="display: none;">
+                <div class="no-signal" id="no-signal-1">
+                    <div class="no-signal-icon">📹</div>
+                    <div class="no-signal-text">等待视频流...</div>
+                    <div class="no-signal-subtext">正在尝试连接</div>
+                </div>
+            </div>
+            <div class="camera-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="cam1-count">0</div>
+                    <div class="stat-label">检测目标</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="cam1-fps">0</div>
+                    <div class="stat-label">FPS</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="cam1-detect-time">0ms</div>
+                    <div class="stat-label">检测时间</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="camera-box">
+            <div class="camera-header">
+                <div class="camera-title">摄像头 2</div>
+                <div class="camera-status">
+                    <div class="status-dot" id="status-dot-2"></div>
+                    <span id="status-text-2">离线</span>
+                </div>
+            </div>
+            <div class="camera-frame-container">
+                <img id="cam2" class="camera-frame" src="" alt="摄像头2" style="display: none;">
+                <div class="no-signal" id="no-signal-2">
+                    <div class="no-signal-icon">📹</div>
+                    <div class="no-signal-text">等待视频流...</div>
+                    <div class="no-signal-subtext">正在尝试连接</div>
+                </div>
+            </div>
+            <div class="camera-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="cam2-count">0</div>
+                    <div class="stat-label">检测目标</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="cam2-fps">0</div>
+                    <div class="stat-label">FPS</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="cam2-detect-time">0ms</div>
+                    <div class="stat-label">检测时间</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="camera-box">
+            <div class="camera-header">
+                <div class="camera-title">摄像头 3</div>
+                <div class="camera-status">
+                    <div class="status-dot" id="status-dot-3"></div>
+                    <span id="status-text-3">离线</span>
+                </div>
+            </div>
+            <div class="camera-frame-container">
+                <img id="cam3" class="camera-frame" src="" alt="摄像头3" style="display: none;">
+                <div class="no-signal" id="no-signal-3">
+                    <div class="no-signal-icon">📹</div>
+                    <div class="no-signal-text">等待视频流...</div>
+                    <div class="no-signal-subtext">正在尝试连接</div>
+                </div>
+            </div>
+            <div class="camera-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="cam3-count">0</div>
+                    <div class="stat-label">检测目标</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="cam3-fps">0</div>
+                    <div class="stat-label">FPS</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="cam3-detect-time">0ms</div>
+                    <div class="stat-label">检测时间</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bottom-section">
+        <div class="panel">
+            <div class="panel-header">
+                系统日志
+                <button class="refresh-btn" onclick="clearLogs()">清空</button>
+            </div>
+            <div class="log-container" id="log-container"></div>
+        </div>
+        
+        <div class="panel">
+            <div class="panel-header">
+                实时检测结果
+                <button class="refresh-btn" onclick="clearDetections()">清空</button>
+            </div>
+            <div class="detection-list" id="detection-list"></div>
+        </div>
+    </div>
+    
+    <!-- MQTT消息订阅面板（独占一行） -->
+    <div class="mqtt-section" style="margin-top: 20px;">
+        <div class="panel" style="width: 100%;">
+            <div class="panel-header">
+                MQTT消息订阅
+                <button class="refresh-btn" onclick="clearMqttMessages()">清空</button>
+            </div>
+            <div class="mqtt-container" id="mqtt-container"></div>
+        </div>
+    </div>
+    
+    <div class="bottom-section">
+        <div class="panel">
+            <div class="panel-header">
+                上传图片检测
+                <button class="refresh-btn" onclick="clearUpload()">清空</button>
+            </div>
+            <div class="upload-container" style="padding: 20px;">
+                <div class="upload-area" style="border: 2px dashed #667eea; border-radius: 15px; padding: 40px; text-align: center; margin-bottom: 25px; transition: all 0.3s ease;">
+                    <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                    <button onclick="document.getElementById('fileInput').click()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 14px 28px; border-radius: 30px; cursor: pointer; font-size: 1.1rem; font-weight: 500; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);">
+                        选择图片
+                    </button>
+                    <p style="margin-top: 15px; color: #6c757d; font-size: 0.95rem;">支持 JPG、PNG 格式</p>
+                </div>
+                <div id="uploadResult" style="display: none; animation: fadeInUp 0.5s ease;">
+                    <h4 style="margin-bottom: 20px; color: #333; font-size: 1.2rem; font-weight: 600;">检测结果</h4>
+                    <div style="display: flex; gap: 25px; align-items: flex-start; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <h5 style="margin-bottom: 12px; color: #666; font-size: 1rem;">检测图片</h5>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                                <img id="resultImage" style="max-width: 100%; border-radius: 8px; transition: transform 0.3s ease;">
+                            </div>
+                        </div>
+                        <div style="flex: 1; min-width: 250px;">
+                            <h5 style="margin-bottom: 12px; color: #666; font-size: 1rem;">检测目标</h5>
+                            <div id="uploadObjects" style="max-height: 350px; overflow-y: auto; background: #f8f9fa; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <div class="panel-header">
+                摄像头截图检测
+                <button class="refresh-btn" onclick="clearScreenshot()">清空</button>
+            </div>
+            <div class="screenshot-container" style="padding: 20px;">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px;">
+                    <button onclick="takeScreenshot(1)" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 16px; border-radius: 12px; cursor: pointer; font-size: 0.95rem; font-weight: 500; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);">
+                        摄像头 1 截图
+                    </button>
+                    <button onclick="takeScreenshot(2)" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 16px; border-radius: 12px; cursor: pointer; font-size: 0.95rem; font-weight: 500; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);">
+                        摄像头 2 截图
+                    </button>
+                    <button onclick="takeScreenshot(3)" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 16px; border-radius: 12px; cursor: pointer; font-size: 0.95rem; font-weight: 500; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);">
+                        摄像头 3 截图
+                    </button>
+                </div>
+                <div id="screenshotResult" style="display: none; animation: fadeInUp 0.5s ease;">
+                    <h4 style="margin-bottom: 20px; color: #333; font-size: 1.2rem; font-weight: 600;">截图检测结果</h4>
+                    <div style="display: flex; gap: 25px; align-items: flex-start; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <h5 style="margin-bottom: 12px; color: #666; font-size: 1rem;">截图</h5>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                                <img id="screenshotImage" style="max-width: 100%; border-radius: 8px; transition: transform 0.3s ease;">
+                            </div>
+                        </div>
+                        <div style="flex: 1; min-width: 250px;">
+                            <h5 style="margin-bottom: 12px; color: #666; font-size: 1rem;">检测目标</h5>
+                            <div id="screenshotObjects" style="max-height: 350px; overflow-y: auto; background: #f8f9fa; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>YOLOv8 智能目标检测系统</p>
+        <p>实时多路视频流 AI 分析平台</p>
+    </div>
+    
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <script>
+        // 连接到SocketIO服务器
+        const socket = io();
+        
+        // 状态跟踪
+        const cameraStats = {
+            1: { count: 0, fps: 0, lastFrame: 0, detectTime: 0 },
+            2: { count: 0, fps: 0, lastFrame: 0, detectTime: 0 },
+            3: { count: 0, fps: 0, lastFrame: 0, detectTime: 0 }
+        };
+        
+        let totalDetections = 0;
+        let activeCameras = 0;
+        let gpuUsage = 0;
+        
+        // 处理帧更新
+        socket.on('frame', function(data) {
+            const camId = data.cam_id;
+            const frame = data.frame;
+            const detectTime = data.detect_time || 0;
+            
+            const imgElement = document.getElementById(`cam${camId}`);
+            const noSignalElement = document.getElementById(`no-signal-${camId}`);
+            const statusDot = document.getElementById(`status-dot-${camId}`);
+            const statusText = document.getElementById(`status-text-${camId}`);
+            
+            if (imgElement) {
+                imgElement.src = `data:image/jpeg;base64,${frame}`;
+                imgElement.style.display = 'block';
+                
+                if (noSignalElement) {
+                    noSignalElement.style.display = 'none';
+                }
+                
+                // 更新状态
+                statusDot.classList.add('active');
+                statusText.textContent = '在线';
+                
+                // 更新检测时间
+                cameraStats[camId].detectTime = detectTime;
+                document.getElementById(`cam${camId}-detect-time`).textContent = `${detectTime}ms`;
+                
+                // 更新FPS
+                const now = Date.now();
+                if (cameraStats[camId].lastFrame > 0) {
+                    const fps = Math.round(1000 / (now - cameraStats[camId].lastFrame));
+                    cameraStats[camId].fps = fps;
+                    document.getElementById(`cam${camId}-fps`).textContent = fps;
+                }
+                cameraStats[camId].lastFrame = now;
+                
+                // 更新活跃摄像头计数
+                updateActiveCameras();
+                updateAverageFPS();
+            }
+        });
+        
+        // 处理日志消息
+        socket.on('log', function(data) {
+            addLogMessage(data.message, 'info');
+        });
+        
+        // 处理连接消息
+        socket.on('message', function(data) {
+            addLogMessage(data.data, 'success');
+        });
+        
+        // 处理GPU使用率
+        socket.on('gpu_usage', function(data) {
+            gpuUsage = data.usage;
+            document.getElementById('gpu-usage').textContent = `${gpuUsage}%`;
+        });
+        
+        // 添加日志消息
+        function addLogMessage(message, type = 'info') {
+            const logContainer = document.getElementById('log-container');
+            const logMessage = document.createElement('div');
+            logMessage.className = `log-message ${type}`;
+            
+            const time = new Date().toLocaleString();
+            logMessage.innerHTML = `<span class="log-time">${time}</span> - ${message}`;
+            
+            logContainer.appendChild(logMessage);
+            
+            // 限制日志数量
+            while (logContainer.children.length > 100) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+            
+            // 滚动到底部
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        // 添加检测结果
+        function addDetection(detection, camId) {
+            const detectionList = document.getElementById('detection-list');
+            const detectionItem = document.createElement('div');
+            detectionItem.className = 'detection-item';
+            
+            const confidence = (detection.conf * 100).toFixed(1);
+            let confidenceColor = '#667eea';
+            if (confidence < 50) confidenceColor = '#ff4757';
+            else if (confidence < 70) confidenceColor = '#ffa502';
+            else confidenceColor = '#2ed573';
+            
+            detectionItem.innerHTML = `
+                <span class="detection-class">${detection.class}</span>
+                <div class="detection-details">
+                    <span class="detection-confidence" style="background: ${confidenceColor};">${confidence}%</span>
+                    <span class="detection-camera">摄像头 ${camId}</span>
+                </div>
+            `;
+            
+            detectionList.insertBefore(detectionItem, detectionList.firstChild);
+            
+            // 限制检测结果显示数量
+            while (detectionList.children.length > 50) {
+                detectionList.removeChild(detectionList.lastChild);
+            }
+        }
+        
+        // 更新活跃摄像头计数
+        function updateActiveCameras() {
+            activeCameras = 0;
+            for (let i = 1; i <= 3; i++) {
+                const statusDot = document.getElementById(`status-dot-${i}`);
+                if (statusDot && statusDot.classList.contains('active')) {
+                    activeCameras++;
+                }
+            }
+            document.getElementById('active-cameras').textContent = `${activeCameras}/3`;
+        }
+        
+        // 更新总检测目标数
+        function updateTotalDetections() {
+            totalDetections = 0;
+            for (let i = 1; i <= 3; i++) {
+                totalDetections += cameraStats[i].count;
+            }
+            document.getElementById('total-detections').textContent = totalDetections;
+        }
+        
+        // 更新平均FPS
+        function updateAverageFPS() {
+            let totalFPS = 0;
+            let count = 0;
+            for (let i = 1; i <= 3; i++) {
+                if (cameraStats[i].fps > 0) {
+                    totalFPS += cameraStats[i].fps;
+                    count++;
+                }
+            }
+            const avgFPS = count > 0 ? Math.round(totalFPS / count) : 0;
+            document.getElementById('fps').textContent = avgFPS;
+        }
+        
+        // 处理检测结果
+        socket.on('detection', function(data) {
+            if (data.objects) {
+                cameraStats[data.cam].count = data.objects.length;
+                document.getElementById(`cam${data.cam}-count`).textContent = data.objects.length;
+                
+                data.objects.forEach(obj => {
+                    addDetection(obj, data.cam);
+                });
+                
+                updateTotalDetections();
+            }
+        });
+        
+        // 处理MQTT消息
+        socket.on('mqtt_message', function(data) {
+            addMqttMessage(data.topic, data.payload);
+        });
+        
+        // 定期更新状态
+        setInterval(() => {
+            const now = Date.now();
+            let totalFPS = 0;
+            let count = 0;
+            
+            for (let i = 1; i <= 3; i++) {
+                if (now - cameraStats[i].lastFrame > 3000) {
+                    // 超过3秒没有帧，认为离线
+                    const statusDot = document.getElementById(`status-dot-${i}`);
+                    const statusText = document.getElementById(`status-text-${i}`);
+                    const imgElement = document.getElementById(`cam${i}`);
+                    const noSignalElement = document.getElementById(`no-signal-${i}`);
+                    
+                    if (statusDot) statusDot.classList.remove('active');
+                    if (statusText) statusText.textContent = '离线';
+                    if (imgElement) imgElement.style.display = 'none';
+                    if (noSignalElement) noSignalElement.style.display = 'flex';
+                    
+                    cameraStats[i].fps = 0;
+                    cameraStats[i].count = 0;
+                    document.getElementById(`cam${i}-fps`).textContent = '0';
+                    document.getElementById(`cam${i}-count`).textContent = '0';
+                } else if (cameraStats[i].fps > 0) {
+                    totalFPS += cameraStats[i].fps;
+                    count++;
+                }
+            }
+            
+            updateActiveCameras();
+            updateTotalDetections();
+            
+            const avgFPS = count > 0 ? Math.round(totalFPS / count) : 0;
+            document.getElementById('fps').textContent = avgFPS;
+        }, 1000);
+        
+        // 清空日志
+        function clearLogs() {
+            const logContainer = document.getElementById('log-container');
+            logContainer.innerHTML = '';
+            addLogMessage('日志已清空', 'success');
+        }
+        
+        // 清空检测结果
+        function clearDetections() {
+            const detectionList = document.getElementById('detection-list');
+            detectionList.innerHTML = '';
+            addLogMessage('检测结果已清空', 'success');
+        }
+        
+        // 添加MQTT消息
+        function addMqttMessage(topic, payload) {
+            const mqttContainer = document.getElementById('mqtt-container');
+            const mqttMessage = document.createElement('div');
+            
+            // 根据主题确定消息类型
+            let messageClass = 'mqtt-message';
+            if (topic.includes('/camera/1')) {
+                messageClass += ' camera-1';
+            } else if (topic.includes('/camera/2')) {
+                messageClass += ' camera-2';
+            } else if (topic.includes('/camera/3')) {
+                messageClass += ' camera-3';
+            } else if (topic.includes('/camera/0')) {
+                messageClass += ' upload';
+            }
+            
+            mqttMessage.className = messageClass;
+            
+            const time = new Date().toLocaleString();
+            const formattedPayload = JSON.stringify(payload, null, 2);
+            
+            mqttMessage.innerHTML = `
+                <span class="mqtt-time">${time}</span>
+                <span class="mqtt-topic">${topic}</span>
+                <pre class="mqtt-payload">${formattedPayload}</pre>
+            `;
+            
+            mqttContainer.insertBefore(mqttMessage, mqttContainer.firstChild);
+            
+            // 限制MQTT消息数量
+            while (mqttContainer.children.length > 50) {
+                mqttContainer.removeChild(mqttContainer.lastChild);
+            }
+            
+            // 滚动到底部
+            mqttContainer.scrollTop = 0;
+        }
+        
+        // 清空MQTT消息
+        function clearMqttMessages() {
+            const mqttContainer = document.getElementById('mqtt-container');
+            mqttContainer.innerHTML = '';
+            addLogMessage('MQTT消息已清空', 'success');
+        }
+        
+        // 页面加载完成提示
+        window.addEventListener('load', () => {
+            addLogMessage('系统界面加载完成', 'success');
+        });
+        
+        // 连接状态监控
+        socket.on('connect', () => {
+            addLogMessage('WebSocket连接成功', 'success');
+        });
+        
+        socket.on('disconnect', () => {
+            addLogMessage('WebSocket连接断开', 'error');
+        });
+        
+        // 上传图片检测
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                addLogMessage('正在上传图片进行检测...', 'info');
+                
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        addLogMessage(`检测完成，发现 ${data.objects.length} 个目标`, 'success');
+                        
+                        // 显示结果
+                        document.getElementById('resultImage').src = `data:image/jpeg;base64,${data.image}`;
+                        
+                        // 显示检测目标
+                        const objectsContainer = document.getElementById('uploadObjects');
+                        objectsContainer.innerHTML = '';
+                        
+                        data.objects.forEach(obj => {
+                            const confidence = (obj.conf * 100).toFixed(1);
+                            let confidenceColor = '#667eea';
+                            if (confidence < 50) confidenceColor = '#ff4757';
+                            else if (confidence < 70) confidenceColor = '#ffa502';
+                            else confidenceColor = '#2ed573';
+                            
+                            const item = document.createElement('div');
+                            item.className = 'detection-item';
+                            item.innerHTML = `
+                                <span class="detection-class">${obj.class}</span>
+                                <div class="detection-details">
+                                    <span class="detection-confidence" style="background: ${confidenceColor};">${confidence}%</span>
+                                </div>
+                            `;
+                            objectsContainer.appendChild(item);
+                        });
+                        
+                        document.getElementById('uploadResult').style.display = 'block';
+                    } else {
+                        addLogMessage('上传检测失败: ' + data.error, 'error');
+                    }
+                })
+                .catch(error => {
+                    addLogMessage('上传检测异常: ' + error.message, 'error');
+                });
+            }
+        });
+        
+        // 清空上传结果
+        function clearUpload() {
+            document.getElementById('uploadResult').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+            addLogMessage('上传结果已清空', 'success');
+        }
+        
+        // 摄像头截图检测
+        function takeScreenshot(camId) {
+            addLogMessage(`正在对摄像头 ${camId} 进行截图检测...`, 'info');
+            
+            // 获取当前摄像头的帧
+            const imgElement = document.getElementById(`cam${camId}`);
+            if (imgElement && imgElement.src) {
+                // 从base64转换为Blob
+                const base64Image = imgElement.src.split(',')[1];
+                const blob = base64ToBlob(base64Image, 'image/jpeg');
+                const file = new File([blob], 'screenshot.jpg', { type: 'image/jpeg' });
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        addLogMessage(`摄像头 ${camId} 截图检测完成，发现 ${data.objects.length} 个目标`, 'success');
+                        
+                        // 显示结果
+                        document.getElementById('screenshotImage').src = `data:image/jpeg;base64,${data.image}`;
+                        
+                        // 显示检测目标
+                        const objectsContainer = document.getElementById('screenshotObjects');
+                        objectsContainer.innerHTML = '';
+                        
+                        data.objects.forEach(obj => {
+                            const confidence = (obj.conf * 100).toFixed(1);
+                            let confidenceColor = '#667eea';
+                            if (confidence < 50) confidenceColor = '#ff4757';
+                            else if (confidence < 70) confidenceColor = '#ffa502';
+                            else confidenceColor = '#2ed573';
+                            
+                            const item = document.createElement('div');
+                            item.className = 'detection-item';
+                            item.innerHTML = `
+                                <span class="detection-class">${obj.class}</span>
+                                <div class="detection-details">
+                                    <span class="detection-confidence" style="background: ${confidenceColor};">${confidence}%</span>
+                                </div>
+                            `;
+                            objectsContainer.appendChild(item);
+                        });
+                        
+                        document.getElementById('screenshotResult').style.display = 'block';
+                    } else {
+                        addLogMessage('截图检测失败: ' + data.error, 'error');
+                    }
+                })
+                .catch(error => {
+                    addLogMessage('截图检测异常: ' + error.message, 'error');
+                });
+            } else {
+                addLogMessage(`摄像头 ${camId} 无视频流，无法截图`, 'error');
+            }
+        }
+        
+        // 清空截图结果
+        function clearScreenshot() {
+            document.getElementById('screenshotResult').style.display = 'none';
+            addLogMessage('截图结果已清空', 'success');
+        }
+        
+        // Base64转Blob
+        function base64ToBlob(base64, mimeType) {
+            const bytes = atob(base64);
+            const array = [];
+            for (let i = 0; i < bytes.length; i++) {
+                array.push(bytes.charCodeAt(i));
+            }
+            return new Blob([new Uint8Array(array)], { type: mimeType });
+        }
+    </script>
+</body>
+</html>

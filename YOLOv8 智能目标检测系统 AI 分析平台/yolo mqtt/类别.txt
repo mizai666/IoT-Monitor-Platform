@@ -1,0 +1,363 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# COCO 2017 dataset https://cocodataset.org by Microsoft
+# Documentation: https://docs.ultralytics.com/datasets/detect/coco/
+# Example usage: yolo train data=coco.yaml
+# parent
+# ├── ultralytics
+# └── datasets
+#     └── coco  ← downloads here (20.1 GB)
+
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+path: ../datasets/coco # dataset root dir
+train: train2017.txt # train images (relative to 'path') 118287 images
+val: val2017.txt # val images (relative to 'path') 5000 images
+test: test-dev2017.txt # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
+
+# Classes
+
+#课程
+
+names:
+
+姓名：
+
+0: person
+
+0：人
+
+1: bicycle
+
+1：自行车
+
+2: car
+
+2：汽车
+
+3: motorcycle
+
+3：摩托车
+
+4: airplane
+
+4：飞机
+
+5: bus
+
+5：公交车
+
+6: train
+
+6：火车
+
+7: truck
+
+7：卡车
+
+8: boat
+
+8：船
+
+9: traffic light
+
+9：交通信号灯
+
+10: fire hydrant
+
+10：消火栓
+
+11: stop sign
+
+11：停车标志
+
+12: parking meter
+
+12：停车计时器
+
+13: bench
+
+13：长凳
+
+14: bird
+
+14：鸟
+
+15: cat
+
+15：猫
+
+16: dog
+
+16：狗
+
+17: horse
+
+17：马
+
+18: sheep
+
+18：羊
+
+19: cow
+
+19：奶牛
+
+20: elephant
+
+20：大象
+
+21: bear
+
+21：熊
+
+22: zebra
+
+22：斑马
+
+23: giraffe
+
+23：长颈鹿
+
+24: backpack
+
+24：背包
+
+25: umbrella
+
+25：雨伞
+
+26: handbag
+
+26：手提包
+
+27: tie
+
+27：领带
+
+28: suitcase
+
+28：手提箱
+
+29: frisbee
+
+29：飞盘
+
+30: skis
+
+30：滑雪板
+
+31: snowboard
+
+31：滑雪板
+
+32: sports ball
+
+32：运动球
+
+33: kite
+
+33：风筝
+
+34: baseball bat
+
+34：棒球棍
+
+35: baseball glove
+
+35：棒球手套
+
+36: skateboard
+
+36：滑板
+
+37: surfboard
+
+37：冲浪板
+
+38: tennis racket
+
+38：网球拍
+
+39: bottle
+
+39：瓶子
+
+40: wine glass
+
+40：酒杯
+
+41: cup
+
+41：杯子
+
+42: fork
+
+42：叉子
+
+43: knife
+
+43：刀
+
+44: spoon
+
+44：勺子
+
+45: bowl
+
+45：碗
+
+46: banana
+
+46：香蕉
+
+47: apple
+
+47：苹果
+
+48: sandwich
+
+48：三明治
+
+49: orange
+
+49：橙色
+
+50: broccoli
+
+50：西兰花
+
+51: carrot
+
+51：胡萝卜
+
+52: hot dog
+
+52：热狗
+
+53: pizza
+
+53：披萨
+
+54: donut
+
+54：甜甜圈
+
+55: cake
+
+55：蛋糕
+
+56: chair
+
+56：椅子
+
+57: couch
+
+57：沙发
+
+58: potted plant
+
+58：盆栽
+
+59: bed
+
+59：床
+
+60: dining table
+
+60：餐桌
+
+61: toilet
+
+61：卫生间
+
+62: tv
+
+62：电视
+
+63: laptop
+
+63：笔记本电脑
+
+64: mouse
+
+64：鼠标
+
+65: remote
+
+65：远程
+
+66: keyboard
+
+66：键盘
+
+67: cell phone
+
+67：手机
+
+68: microwave
+
+68：微波炉
+
+69: oven
+
+69：烤箱
+
+70: toaster
+
+70：烤面包机
+
+71: sink
+
+71：水槽
+
+72: refrigerator
+
+72：冰箱
+
+73: book
+
+73：书籍
+
+74: clock
+
+74：时钟
+
+75: vase
+
+75：花瓶
+
+76: scissors
+
+76：剪刀
+
+77: teddy bear
+
+77：泰迪熊
+
+78: hair drier
+
+78：吹风机
+
+79: toothbrush
+
+79：牙刷
+
+# Download script/URL (optional)
+download: |
+  from pathlib import Path
+
+  from ultralytics.utils.downloads import download
+
+  # Download labels
+  segments = True  # segment or box labels
+  dir = Path(yaml["path"])  # dataset root dir
+  url = "https://github.com/ultralytics/assets/releases/download/v0.0.0/"
+  urls = [url + ("coco2017labels-segments.zip" if segments else "coco2017labels.zip")]  # labels
+  download(urls, dir=dir.parent)
+  # Download data
+  urls = [
+      "http://images.cocodataset.org/zips/train2017.zip",  # 19G, 118k images
+      "http://images.cocodataset.org/zips/val2017.zip",  # 1G, 5k images
+      "http://images.cocodataset.org/zips/test2017.zip",  # 7G, 41k images (optional)
+  ]
+  download(urls, dir=dir / "images", threads=3)

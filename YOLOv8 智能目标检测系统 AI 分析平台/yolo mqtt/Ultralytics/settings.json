@@ -1,0 +1,21 @@
+{
+  "settings_version": "0.0.6",
+  "datasets_dir": "D:\\C\\YOLOv8 \u667a\u80fd\u76ee\u6807\u68c0\u6d4b\u7cfb\u7edf AI \u5206\u6790\u5e73\u53f0\\yolo mqtt\\datasets",
+  "weights_dir": "weights",
+  "runs_dir": "runs",
+  "uuid": "1d14308e22cf158d711a536c0708a1f241fa3578c521bcb58bcc4de587d39a1a",
+  "sync": true,
+  "api_key": "",
+  "openai_api_key": "",
+  "clearml": true,
+  "comet": true,
+  "dvc": true,
+  "hub": true,
+  "mlflow": true,
+  "neptune": true,
+  "raytune": true,
+  "tensorboard": false,
+  "wandb": false,
+  "vscode_msg": true,
+  "openvino_msg": true
+}
